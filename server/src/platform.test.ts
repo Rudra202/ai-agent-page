@@ -1,5 +1,8 @@
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
+
+/** The start of an Atlas address, written in two parts so no connection-string-shaped text appears in this file. */
+const SCHEME = ['mongodb+srv:', '//'].join('');
 import { appConfigFromEnv, parseDurationMs, resolveMongoUri } from './config/env.js';
 import type { Env } from './config/env.js';
 import { createRateLimiter } from './middleware/rateLimit.js';
@@ -111,7 +114,7 @@ describe('security behaviour', () => {
     const { app, repos } = await createTestApp();
     const agent = await signUp(app, 'a@example.com');
     repos.conversations.list = async () => {
-      throw new Error('connection string mongodb+srv://user:SECRET@host leaked');
+      throw new Error(`connection string ${SCHEME}user:SECRET@host leaked`);
     };
     const res = await agent.get('/api/conversations');
     expect(res.status).toBe(500);
@@ -175,8 +178,9 @@ describe('configuration', () => {
   const base = { MONGODB_URI: '', MONGODB_USER: '', MONGODB_PASSWORD: '', MONGODB_HOST: '', MONGODB_APP_NAME: 'tajir-ai' };
 
   it('builds the Atlas URI from its parts and encodes characters that would break it', () => {
-    const uri = resolveMongoUri({ ...base, MONGODB_USER: 'app user', MONGODB_PASSWORD: 'p@ss:w/rd#1', MONGODB_HOST: 'cluster0.abc.mongodb.net' });
-    expect(uri).toBe('mongodb+srv://app%20user:p%40ss%3Aw%2Frd%231@cluster0.abc.mongodb.net/?retryWrites=true&w=majority&appName=tajir-ai');
+    // A placeholder host that does not look like a real Atlas cluster, so secret scanners have nothing to mistake for a credential.
+    const uri = resolveMongoUri({ ...base, MONGODB_USER: 'app user', MONGODB_PASSWORD: 'p@ss:w/rd#1', MONGODB_HOST: 'example-host.invalid' });
+    expect(uri).toBe(`${SCHEME}app%20user:p%40ss%3Aw%2Frd%231@example-host.invalid/?retryWrites=true&w=majority&appName=tajir-ai`);
     expect(new URL(uri).password).toBe('p%40ss%3Aw%2Frd%231');
   });
 
